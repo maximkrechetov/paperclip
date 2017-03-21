@@ -2,6 +2,8 @@ import cv2
 import config
 
 
+# TODO: Crop
+# TODO: Конвертация?
 # Класс-процессор
 class ImageProcessor:
     STORE_DIR = config.STORE_DIR
@@ -68,14 +70,27 @@ class ImageProcessor:
 
     # Ресайз изображения
     def _resize(self):
-        print('RESIZE')
+        original_height, original_width = self.img.shape[:2]
+        aspect_ratio = original_height / original_width
+
+        # Сохраняем пропорции
+        if aspect_ratio > 1:
+            height = self._height
+            width = int(height / aspect_ratio)
+        elif aspect_ratio == 1.0:
+            width = self._width
+            height = width
+        else:
+            width = self._width
+            height = int(width * aspect_ratio)
+
         self.img = cv2.resize(
             self.img,
             (
-                self._width,
-                self._height
+                width,
+                height
             ),
-            interpolation=cv2.INTER_CUBIC
+            interpolation=cv2.INTER_LINEAR
         )
 
 

@@ -17,6 +17,7 @@ app.config['STORE_DIR'] = config.STORE_DIR
 """
 
 
+# TODO: Определение mimetype
 @app.route('/<path:path>')
 def process(path):
     full_path = app.config['STORE_DIR'] + path
