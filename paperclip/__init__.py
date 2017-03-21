@@ -1,0 +1,1 @@
+from .paperclip import app
