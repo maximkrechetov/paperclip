@@ -24,6 +24,7 @@ class ImageProcessor:
         self._id = None
         self._width = None
         self._height = None
+        self._cropping = None
         self._extension = parts[1]
 
         # actions
@@ -47,6 +48,8 @@ class ImageProcessor:
             self._parse_id(part)
             # Парсим размеры
             self._parse_resize(part)
+            # Парсим параметры кропа
+            self._parse_crop(part)
 
     # Парсинг ID изображения
     def _parse_id(self, part):
@@ -67,6 +70,14 @@ class ImageProcessor:
         self._width = int(sides[0])
         self._height = int(sides[1])
         self._actions.append('_resize')
+
+    # Парсинг кропа, назначение кропа
+    def _parse_crop(self, part):
+        values = part.split('-')
+
+        if len(values) == 2 and values[0] == 'crop':
+            self._cropping = values[1]
+            self._actions.append('_crop')
 
     # Ресайз изображения
     def _resize(self):
@@ -93,5 +104,16 @@ class ImageProcessor:
             interpolation=cv2.INTER_LINEAR
         )
 
+    # Кроппинг
+    def _crop(self):
+        # Кропим, исходя из меньшей стороны
+        # Пока только "center"
+        height, width = self.img.shape[:2]
+        offset = int(abs(height - width) / 2)
+
+        if height > width:
+            self.img = self.img[offset:offset + width, 0:width]
+        elif height < width:
+            self.img = self.img[0:height, offset:offset + height]
 
 

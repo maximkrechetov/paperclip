@@ -13,7 +13,7 @@ app.config['STORE_DIR'] = config.STORE_DIR
 """
 Примерный URL:
 
-/1234567_320x240.jpg
+/1234567_320x240_crop-center.jpg
 """
 
 
@@ -27,6 +27,10 @@ def process(path):
     if image_path.is_file():
         return send_file(full_path, mimetype='image/jpeg')
 
-    img = ImageProcessor(path)
-    img.process()
-    return send_file(full_path, mimetype='image/jpeg')
+    try:
+        img = ImageProcessor(path)
+        img.process()
+        return send_file(full_path, mimetype='image/jpeg')
+    except Exception as e:
+        print(e)
+        return 'Problem with image processing'
