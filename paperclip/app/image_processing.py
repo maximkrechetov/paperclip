@@ -1,9 +1,9 @@
 import cv2
 import config
+import os
+import glob
 
 
-# TODO: Crop
-# TODO: Конвертация?
 # Класс-процессор
 class ImageProcessor:
     STORE_DIR = config.STORE_DIR
@@ -26,6 +26,7 @@ class ImageProcessor:
         self._height = None
         self._cropping = None
         self._extension = parts[1]
+        self._save_options = []
 
         # actions
         self._actions = []
@@ -33,12 +34,20 @@ class ImageProcessor:
     # Основной метод
     def process(self):
         self._parse()
-        self.img = cv2.imread("{0}{1}.{2}".format(self.STORE_DIR, self._id, self._extension))
+
+        # Ищем картинку по имени
+        images = glob.glob(os.path.join(self.STORE_DIR, "{0}.*".format(self._id)))
+        image = images and images[0]
+
+        if not image:
+            return False
+
+        self.img = cv2.imread(image)
 
         for action in self._actions:
             getattr(self, action, None)()
 
-        cv2.imwrite(self.STORE_DIR + self.full_path, self.img)
+        cv2.imwrite(self.STORE_DIR + self.full_path, self.img, self._save_options)
         return True
 
     # Парсинг пути, назначение необходимых процедур
@@ -50,6 +59,8 @@ class ImageProcessor:
             self._parse_resize(part)
             # Парсим параметры кропа
             self._parse_crop(part)
+            # Парсим параметры качества
+            self._parse_quality(part)
 
     # Парсинг ID изображения
     def _parse_id(self, part):
@@ -78,6 +89,23 @@ class ImageProcessor:
         if len(values) == 2 and values[0] == 'crop':
             self._cropping = values[1]
             self._actions.append('_crop')
+
+    # Парсинг качества изображения
+    def _parse_quality(self, part):
+        values = part.split('-')
+
+        if len(values) == 2 and values[0] == 'quality':
+            options = []
+            quality = int(values[1])
+
+            if self._extension == 'jpg':
+                options = [cv2.IMWRITE_JPEG_QUALITY, quality]
+            elif self._extension == 'webp':
+                options = [int(cv2.IMWRITE_WEBP_QUALITY), quality]
+            elif self._extension == 'png':
+                options = [cv2.IMWRITE_PNG_COMPRESSION, int((quality / 10)) - 1]
+
+            self._save_options = options
 
     # Ресайз изображения
     def _resize(self):
@@ -115,5 +143,3 @@ class ImageProcessor:
             self.img = self.img[offset:offset + width, 0:width]
         elif height < width:
             self.img = self.img[0:height, offset:offset + height]
-
-
