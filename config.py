@@ -1,2 +1,3 @@
 DEBUG = True
-STORE_DIR = '/home/koma-tozz/paperclip_tests/'
+# Путь к папке с фотками
+STORE_DIR = ''
