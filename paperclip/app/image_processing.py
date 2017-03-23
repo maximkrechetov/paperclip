@@ -2,6 +2,7 @@ import cv2
 import config
 import os
 import glob
+import numpy as np
 
 
 # Класс-процессор
@@ -25,6 +26,7 @@ class ImageProcessor:
         self._width = None
         self._height = None
         self._cropping = None
+        self._quality = None
         self._extension = parts[1]
         self._save_options = []
 
@@ -57,6 +59,8 @@ class ImageProcessor:
             self._parse_id(part)
             # Парсим размеры
             self._parse_resize(part)
+            # Парсим параметры заполнения пустых пикселей
+            self._parse_fill(part)
             # Парсим параметры кропа
             self._parse_crop(part)
             # Парсим параметры качества
@@ -84,6 +88,9 @@ class ImageProcessor:
 
     # Парсинг кропа, назначение кропа
     def _parse_crop(self, part):
+        if self._cropping:
+            return
+
         values = part.split('-')
 
         if len(values) == 2 and values[0] == 'crop':
@@ -92,20 +99,22 @@ class ImageProcessor:
 
     # Парсинг качества изображения
     def _parse_quality(self, part):
+        if self._quality:
+            return
+
         values = part.split('-')
 
         if len(values) == 2 and values[0] == 'quality':
-            options = []
-            quality = int(values[1])
+            self._quality = int(values[1])
+            self._actions.append('_change_quality')
 
-            if self._extension == 'jpg':
-                options = [cv2.IMWRITE_JPEG_QUALITY, quality]
-            elif self._extension == 'webp':
-                options = [int(cv2.IMWRITE_WEBP_QUALITY), quality]
-            elif self._extension == 'png':
-                options = [cv2.IMWRITE_PNG_COMPRESSION, int((quality / 10)) - 1]
-
-            self._save_options = options
+    # Парсинг заполнения до границ изображения после ресайзов
+    def _parse_fill(self, part):
+        # Пока что не заполняем, если есть кроп
+        if self._cropping:
+            return
+        if part == 'fill':
+            self._actions.append('_fill_empty_pixels')
 
     # Ресайз изображения
     def _resize(self):
@@ -143,3 +152,24 @@ class ImageProcessor:
             self.img = self.img[offset:offset + width, 0:width]
         elif height < width:
             self.img = self.img[0:height, offset:offset + height]
+
+    # Изменение качества
+    def _change_quality(self):
+        options = []
+
+        if self._extension == 'jpg':
+            options = [cv2.IMWRITE_JPEG_QUALITY, self._quality]
+        elif self._extension == 'webp':
+            options = [int(cv2.IMWRITE_WEBP_QUALITY), self._quality]
+        elif self._extension == 'png':
+            options = [cv2.IMWRITE_PNG_COMPRESSION, int((self._quality / 10)) - 1]
+
+        self._save_options = options
+
+    # Заполнение пустых пикселей
+    def _fill_empty_pixels(self):
+        canvas = np.ndarray(shape=(self._height, self._width, 3), dtype=np.uint8)
+        canvas[:] = (255, 255, 255)
+        h, w = self.img.shape[:2]
+        canvas[:h, :w, :3] = self.img
+        self.img = canvas

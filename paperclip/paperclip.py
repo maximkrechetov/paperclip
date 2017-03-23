@@ -11,13 +11,6 @@ app.config['DEBUG'] = config.DEBUG
 app.config['STORE_DIR'] = config.STORE_DIR
 
 
-"""
-Примерный URL:
-
-/1234567_320x240_crop-center_quality-100.png
-"""
-
-
 @app.route('/<path:path>')
 def process(path):
     full_path = app.config['STORE_DIR'] + path
