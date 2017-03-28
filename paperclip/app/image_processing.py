@@ -3,6 +3,8 @@ import config
 import os
 import glob
 import numpy as np
+from pathlib import Path
+from flask import abort
 
 
 # Класс-процессор
@@ -20,104 +22,108 @@ class ImageProcessor:
 
         # img
         self.img = None
+        self._img_path = None
 
         # image properties
         self._id = None
         self._width = None
         self._height = None
-        self._cropping = None
+        self._resize = None
         self._quality = None
         self._extension = parts[1]
-        self._save_options = []
+        self._save_options = self._extension == 'jpg' and [cv2.IMWRITE_JPEG_PROGRESSIVE, 2] or []
 
         # actions
         self._actions = []
 
     # Основной метод
     def process(self):
-        self._parse()
+        # Если файл уже имеется, ничего не делаем
+        abs_path = self.STORE_DIR + self.full_path
+        self._img_path = abs_path
 
-        # Ищем картинку по имени
+        if Path(abs_path).is_file():
+            return
+
+        # Парсим параметры и назначаем действия над картинкой
+        self._parse()
+        self._assign_actions()
+
+        # Ищем оригинальную картинку по имени
+        # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
         images = glob.glob(os.path.join(self.STORE_DIR, "{0}.*".format(self._id)))
         image = images and images[0]
 
         if not image:
-            return False
+            abort(404)
+
+        # Никаких действий не требуется, отдаем оригинал
+        if not self._actions:
+            self._img_path = image
+            return
 
         self.img = cv2.imread(image)
 
         for action in self._actions:
             getattr(self, action, None)()
 
-        cv2.imwrite(self.STORE_DIR + self.full_path, self.img, self._save_options)
-        return True
+        cv2.imwrite(abs_path, self.img, self._save_options)
+
+    # Получить полный путь к созданному изображению
+    def get_full_path(self):
+        return self._img_path
+
+    # Получить mimetype изображения
+    def get_mimetype(self):
+        return 'image/' + self._extension
 
     # Парсинг пути, назначение необходимых процедур
     def _parse(self):
         for part in self.parts:
-            # Парсим id
-            self._parse_id(part)
-            # Парсим размеры
-            self._parse_resize(part)
-            # Парсим параметры заполнения пустых пикселей
-            self._parse_fill(part)
-            # Парсим параметры кропа
-            self._parse_crop(part)
-            # Парсим параметры качества
-            self._parse_quality(part)
+            for param_name in ['id', 'resize', 'width', 'height', 'quality']:
+                self._parse_param(part, param_name)
 
-    # Парсинг ID изображения
-    def _parse_id(self, part):
-        if self._id:
-            return
-        self._id = part
-
-    # Парсинг размеров изображения, назначение ресайза
-    def _parse_resize(self, part):
-        if self._width and self._height:
-            return
-
-        sides = part.split('x')
-
-        if len(sides) < 2:
-            return
-
-        self._width = int(sides[0])
-        self._height = int(sides[1])
-        self._actions.append('_resize')
-
-    # Парсинг кропа, назначение кропа
-    def _parse_crop(self, part):
-        if self._cropping:
-            return
-
-        values = part.split('-')
-
-        if len(values) == 2 and values[0] == 'crop':
-            self._cropping = values[1]
-            self._actions.append('_crop')
-
-    # Парсинг качества изображения
-    def _parse_quality(self, part):
+    # Назначить действия
+    def _assign_actions(self):
+        if self._resize:
+            self._actions.append('_' + self._resize)
         if self._quality:
-            return
-
-        values = part.split('-')
-
-        if len(values) == 2 and values[0] == 'quality':
-            self._quality = int(values[1])
             self._actions.append('_change_quality')
 
-    # Парсинг заполнения до границ изображения после ресайзов
-    def _parse_fill(self, part):
-        # Пока что не заполняем, если есть кроп
-        if self._cropping:
+    # Парсинг параметров
+    def _parse_param(self, part, param_name):
+        if getattr(self, '_' + param_name):
             return
-        if part == 'fill':
-            self._actions.append('_fill_empty_pixels')
 
-    # Ресайз изображения
-    def _resize(self):
+        values = part.split('-')
+        if len(values) < 2:
+            abort(400)
+
+        if values[0] == param_name:
+            if values[1].isdigit():
+                values[1] = int(values[1])
+            setattr(self, '_' + param_name, values[1])
+
+    # Получить размеры для ресайза cover
+    def _get_sizes_cover(self):
+        original_height, original_width = self.img.shape[:2]
+        aspect_ratio = original_height / original_width
+
+        # Сохраняем пропорции
+        if aspect_ratio > 1:
+            width = self._width
+            height = int(width * aspect_ratio)
+        elif aspect_ratio == 1.0:
+            width = self._width
+            height = width
+        else:
+            height = self._height
+            width = int(height / aspect_ratio)
+
+        return width, height
+
+    # Получить размеры для ресайза contain
+    def _get_sizes_contain(self):
         original_height, original_width = self.img.shape[:2]
         aspect_ratio = original_height / original_width
 
@@ -132,6 +138,21 @@ class ImageProcessor:
             width = self._width
             height = int(width * aspect_ratio)
 
+        return width, height
+
+    # Создание канвы
+    def _create_canvas(self):
+        canvas = np.ndarray(shape=(self._height, self._width, 3), dtype=np.uint8)
+        canvas[:] = (255, 255, 255)
+        return canvas
+
+    # Ресайз изображения
+    def _make_resize(self):
+        if not self._resize or self._resize not in ['cover', 'contain']:
+            return
+
+        width, height = getattr(self, '_get_sizes_' + self._resize)()
+
         self.img = cv2.resize(
             self.img,
             (
@@ -141,35 +162,46 @@ class ImageProcessor:
             interpolation=cv2.INTER_LINEAR
         )
 
-    # Кроппинг
-    def _crop(self):
-        # Кропим, исходя из меньшей стороны
-        # Пока только "center"
+    # Resize contain
+    def _contain(self):
+        self._make_resize()
+        canvas = self._create_canvas()
         height, width = self.img.shape[:2]
-        offset = int(abs(height - width) / 2)
 
         if height > width:
-            self.img = self.img[offset:offset + width, 0:width]
+            offset = int((self._width - width) / 2)
+            canvas[0:height, offset:offset + width, :3] = self.img
         elif height < width:
-            self.img = self.img[0:height, offset:offset + height]
+            offset = int((self._height - height) / 2)
+            canvas[offset:offset + height, 0:width, :3] = self.img
+        else:
+            canvas[:height, :width, :3] = self.img
+
+        self.img = canvas
+
+    # Resize cover
+    def _cover(self):
+        self._make_resize()
+        canvas = self._create_canvas()
+        height, width = self.img.shape[:2]
+
+        if height > width:
+            offset = int((height - self._height) / 2)
+            canvas = self.img[offset:offset + self._height, 0:width]
+        elif height < width:
+            offset = int((width - self._width) / 2)
+            canvas = self.img[0:height, offset:offset + self._width]
+        else:
+            canvas[:height, :width, :3] = self.img
+
+        self.img = canvas
 
     # Изменение качества
     def _change_quality(self):
-        options = []
-
         if self._extension == 'jpg':
-            options = [cv2.IMWRITE_JPEG_QUALITY, self._quality]
+            self._save_options += [cv2.IMWRITE_JPEG_QUALITY, self._quality]
         elif self._extension == 'webp':
-            options = [int(cv2.IMWRITE_WEBP_QUALITY), self._quality]
-        elif self._extension == 'png':
-            options = [cv2.IMWRITE_PNG_COMPRESSION, int((self._quality / 10)) - 1]
-
-        self._save_options = options
-
-    # Заполнение пустых пикселей
-    def _fill_empty_pixels(self):
-        canvas = np.ndarray(shape=(self._height, self._width, 3), dtype=np.uint8)
-        canvas[:] = (255, 255, 255)
-        h, w = self.img.shape[:2]
-        canvas[:h, :w, :3] = self.img
-        self.img = canvas
+            self._save_options += [int(cv2.IMWRITE_WEBP_QUALITY), self._quality]
+        # Выдаем ошибку во всех остальных случаях
+        else:
+            abort(400)
