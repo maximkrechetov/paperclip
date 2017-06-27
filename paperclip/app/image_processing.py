@@ -20,6 +20,10 @@ class ImageProcessor:
         self.path = parts[0]
         self.parts = self.path.split('_')
 
+        # props for img streaming
+        self.buffer = None
+        self.retval = None
+
         # img
         self.img = None
         self._img_path = None
@@ -67,7 +71,12 @@ class ImageProcessor:
         for action in self._actions:
             getattr(self, action, None)()
 
-        cv2.imwrite(abs_path, self.img, self._save_options)
+        if config.SAVE_PROCESSED_IMAGES:
+            cv2.imwrite(abs_path, self.img, self._save_options)
+        else:
+            retval, buffer = cv2.imencode('.' + self._extension, self.img)
+            self.retval = retval
+            self.buffer = buffer
 
     # Получить полный путь к созданному изображению
     def get_full_path(self):

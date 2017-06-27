@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import send_file
+from flask import send_file, make_response
 from werkzeug.contrib.fixers import ProxyFix
 from paperclip.app.image_processing import ImageProcessor
 import config
@@ -14,7 +14,12 @@ app.config['STORE_DIR'] = config.STORE_DIR
 def magic(path):
     processor = ImageProcessor(path)
     processor.process()
-    return send_file(processor.get_full_path(), mimetype=processor.get_mimetype())
+    if config.SAVE_PROCESSED_IMAGES:
+        return send_file(processor.get_full_path(), mimetype=processor.get_mimetype())
+
+    response = make_response(processor.buffer.tobytes())
+    response.headers['Content-Type'] = processor.get_mimetype()
+    return response
 
 app.wsgi_app = ProxyFix(app.wsgi_app)
 if __name__ == '__main__':
