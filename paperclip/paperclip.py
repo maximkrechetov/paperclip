@@ -13,10 +13,12 @@ app.config['STORE_DIR'] = config.STORE_DIR
 @app.route('/<path:path>')
 def magic(path):
     processor = ImageProcessor(path)
-    processor.process()
+
     if config.SAVE_PROCESSED_IMAGES:
+        processor.process_with_save()
         return send_file(processor.get_full_path(), mimetype=processor.get_mimetype())
 
+    processor.process_without_save()
     response = make_response(processor.buffer.tobytes())
     response.headers['Content-Type'] = processor.get_mimetype()
     return response

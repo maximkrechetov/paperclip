@@ -40,8 +40,35 @@ class ImageProcessor:
         # actions
         self._actions = []
 
-    # Основной метод
-    def process(self):
+    # Основной метод без сохранения
+    def process_without_save(self):
+        # Парсим параметры и назначаем действия над картинкой
+        self._parse()
+        self._assign_actions()
+
+        # Ищем оригинальную картинку по имени
+        # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
+        image = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, config.ORIGINAL_EXTENSION))
+
+        # Если никаких действий не требуется, отдаем оригинал
+        if not self._actions:
+            self._img_path = image
+            return
+
+        try:
+            self.img = cv2.imread(image)
+        except:
+            abort(404)
+
+        for action in self._actions:
+            getattr(self, action, None)()
+
+        retval, buffer = cv2.imencode('.' + self._extension, self.img)
+        self.retval = retval
+        self.buffer = buffer
+
+    # Основной метод с сохранением
+    def process_with_save(self):
         # Если файл уже имеется, ничего не делаем
         abs_path = self.STORE_DIR + self.full_path
         self._img_path = abs_path
@@ -71,12 +98,7 @@ class ImageProcessor:
         for action in self._actions:
             getattr(self, action, None)()
 
-        if config.SAVE_PROCESSED_IMAGES:
-            cv2.imwrite(abs_path, self.img, self._save_options)
-        else:
-            retval, buffer = cv2.imencode('.' + self._extension, self.img)
-            self.retval = retval
-            self.buffer = buffer
+        cv2.imwrite(abs_path, self.img, self._save_options)
 
     # Получить полный путь к созданному изображению
     def get_full_path(self):
