@@ -82,18 +82,17 @@ class ImageProcessor:
 
         # Ищем оригинальную картинку по имени
         # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        images = glob.glob(os.path.join(self.STORE_DIR, "{0}.*".format(self._id)))
-        image = images and images[0]
-
-        if not image:
-            abort(404)
+        image = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, config.ORIGINAL_EXTENSION))
 
         # Никаких действий не требуется, отдаем оригинал
         if not self._actions:
             self._img_path = image
             return
 
-        self.img = cv2.imread(image)
+        try:
+            self.img = cv2.imread(image)
+        except:
+            abort(404)
 
         for action in self._actions:
             getattr(self, action, None)()
