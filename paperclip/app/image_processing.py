@@ -48,7 +48,10 @@ class ImageProcessor:
 
         # Ищем оригинальную картинку по имени
         # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        image = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, config.ORIGINAL_EXTENSION))
+        image = self._get_img()
+
+        if not image:
+            abort(404)
 
         # Если никаких действий не требуется, отдаем оригинал
         if not self._actions:
@@ -82,7 +85,10 @@ class ImageProcessor:
 
         # Ищем оригинальную картинку по имени
         # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        image = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, config.ORIGINAL_EXTENSION))
+        image = self._get_img()
+
+        if not image:
+            abort(404)
 
         # Никаких действий не требуется, отдаем оригинал
         if not self._actions:
@@ -106,6 +112,18 @@ class ImageProcessor:
     # Получить mimetype изображения
     def get_mimetype(self):
         return 'image/' + self._extension
+
+    # Получить путь к изображению
+    def _get_img(self):
+        image = None
+
+        for ext in config.ORIGINAL_EXTENSIONS:
+            path = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, ext))
+            if not Path(path).is_file():
+                continue
+            image = path
+
+        return image
 
     # Парсинг пути, назначение необходимых процедур
     def _parse(self):
