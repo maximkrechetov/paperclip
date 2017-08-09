@@ -1,7 +1,6 @@
 import cv2
 import config
 import os
-import glob
 import numpy as np
 from pathlib import Path
 from flask import abort
@@ -48,18 +47,20 @@ class ImageProcessor:
 
         # Ищем оригинальную картинку по имени
         # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        image = self._get_img()
+        img_path = self._get_original_img_path()
 
-        if not image:
+        if not img_path:
             abort(404)
 
         # Если никаких действий не требуется, отдаем оригинал
         if not self._actions:
-            self._img_path = image
+            self._img_path = img_path
             return
 
+        self._check_extension(img_path)
+
         try:
-            self.img = cv2.imread(image)
+            self.img = cv2.imread(img_path)
         except:
             abort(404)
 
@@ -85,18 +86,20 @@ class ImageProcessor:
 
         # Ищем оригинальную картинку по имени
         # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        image = self._get_img()
+        img_path = self._get_original_img_path()
 
-        if not image:
+        if not img_path:
             abort(404)
 
         # Никаких действий не требуется, отдаем оригинал
         if not self._actions:
-            self._img_path = image
+            self._img_path = img_path
             return
 
+        self._check_extension(img_path)
+
         try:
-            self.img = cv2.imread(image)
+            self.img = cv2.imread(img_path)
         except:
             abort(404)
 
@@ -113,17 +116,22 @@ class ImageProcessor:
     def get_mimetype(self):
         return 'image/' + self._extension
 
+    # Не конвертируем png в jpg из-за проблем с прозрачностью
+    def _check_extension(self, img_path):
+        if img_path.endswith('.png') and self._extension == 'jpg':
+            self._extension = 'png'
+
     # Получить путь к изображению
-    def _get_img(self):
-        image = None
+    def _get_original_img_path(self):
+        img_path = None
 
         for ext in config.ORIGINAL_EXTENSIONS:
             path = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, ext))
             if not Path(path).is_file():
                 continue
-            image = path
+            img_path = path
 
-        return image
+        return img_path
 
     # Парсинг пути, назначение необходимых процедур
     def _parse(self):
