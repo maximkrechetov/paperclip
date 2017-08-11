@@ -19,24 +19,34 @@ class ImageProcessor:
         self.path = parts[0]
         self.parts = self.path.split('_')
 
-        # props for img streaming
+        # Свойства для стриминга
         self.buffer = None
         self.retval = None
 
-        # img
+        # Изображение
         self.img = None
+        # Путь к сохраняемому изображению
         self._img_path = None
 
-        # image properties
+        # Свойства изображения
+        # id
         self._id = None
+        # Ширина
         self._width = None
+        # Высота
         self._height = None
+        # Количество каналов
+        self._channels = 3
+        # Тип ресайза
         self._resize = None
+        # Качество для сохранения
         self._quality = None
+        # Расширение для сохранения
         self._extension = parts[1]
+        # Опции сохранения
         self._save_options = self._extension == 'jpg' and [cv2.IMWRITE_JPEG_PROGRESSIVE, 2] or []
 
-        # actions
+        # Массив действий для сохранения
         self._actions = []
 
     # Основной метод без сохранения
@@ -49,6 +59,7 @@ class ImageProcessor:
         # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
         img_path = self._get_original_img_path()
 
+        # Если оригинал не найден, отдаем 404
         if not img_path:
             abort(404)
 
@@ -60,7 +71,7 @@ class ImageProcessor:
         self._check_extension(img_path)
 
         try:
-            self.img = cv2.imread(img_path)
+            self.img = cv2.imread(img_path, -1) if self._channels == 4 else cv2.imread(img_path)
         except:
             abort(404)
 
@@ -118,7 +129,12 @@ class ImageProcessor:
 
     # Не конвертируем png в jpg из-за проблем с прозрачностью
     def _check_extension(self, img_path):
-        if img_path.endswith('.png') and self._extension == 'jpg':
+        if img_path.endswith('.png'):
+            # Устанавливаем количество каналов в зависимости от расширения оригинала
+            # По умолчанию, количество каналов - 3.
+            # Если открываем PNG, то открываем в 4 каналах
+            self._channels = 4
+            # PNG сохраняем только в PNG
             self._extension = 'png'
 
     # Получить путь к изображению
@@ -198,8 +214,8 @@ class ImageProcessor:
 
     # Создание канвы
     def _create_canvas(self):
-        canvas = np.ndarray(shape=(self._height, self._width, 3), dtype=np.uint8)
-        canvas[:] = (255, 255, 255)
+        canvas = np.ndarray(shape=(self._height, self._width, self._channels), dtype=np.uint8)
+        canvas[:] = tuple([255] * self._channels)
         return canvas
 
     # Ресайз изображения
@@ -225,13 +241,13 @@ class ImageProcessor:
         height, width = self.img.shape[:2]
 
         if height > width:
-            offset = int((self._width - width) / 2)
-            canvas[0:height, offset:offset + width, :3] = self.img
+            offset = abs(int((self._width - width) / 2))
+            canvas[0:height, offset:offset + width, :self._channels] = self.img
         elif height < width:
-            offset = int((self._height - height) / 2)
-            canvas[offset:offset + height, 0:width, :3] = self.img
+            offset = abs(int((self._height - height) / 2))
+            canvas[offset:offset + height, 0:width, :self._channels] = self.img
         else:
-            canvas[:height, :width, :3] = self.img
+            canvas[:height, :width, :self._channels] = self.img
 
         self.img = canvas
 
@@ -242,13 +258,13 @@ class ImageProcessor:
         height, width = self.img.shape[:2]
 
         if height > width:
-            offset = int((height - self._height) / 2)
+            offset = abs(int((height - self._height) / 2))
             canvas = self.img[offset:offset + self._height, 0:width]
         elif height < width:
-            offset = int((width - self._width) / 2)
+            offset = abs(int((width - self._width) / 2))
             canvas = self.img[0:height, offset:offset + self._width]
         else:
-            canvas[:height, :width, :3] = self.img
+            canvas[:height, :width, :self._channels] = self.img
 
         self.img = canvas
 
