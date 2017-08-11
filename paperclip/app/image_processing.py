@@ -274,6 +274,8 @@ class ImageProcessor:
             self._save_options += [cv2.IMWRITE_JPEG_QUALITY, self._quality]
         elif self._extension == 'webp':
             self._save_options += [int(cv2.IMWRITE_WEBP_QUALITY), self._quality]
+        elif self._extension == 'png':
+            pass
         # Выдаем ошибку во всех остальных случаях
         else:
             abort(400)
