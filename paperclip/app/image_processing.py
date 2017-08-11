@@ -71,7 +71,8 @@ class ImageProcessor:
         self._check_extension(img_path)
 
         try:
-            self.img = cv2.imread(img_path, -1) if self._channels == 4 else cv2.imread(img_path)
+            self.img = cv2.imread(img_path, -1)
+            self._channels = self.img.shape[-1]
         except:
             abort(404)
 
@@ -130,11 +131,6 @@ class ImageProcessor:
     # Не конвертируем png в jpg из-за проблем с прозрачностью
     def _check_extension(self, img_path):
         if img_path.endswith('.png'):
-            # Устанавливаем количество каналов в зависимости от расширения оригинала
-            # По умолчанию, количество каналов - 3.
-            # Если открываем PNG, то открываем в 4 каналах
-            self._channels = 4
-            # PNG сохраняем только в PNG
             self._extension = 'png'
 
     # Получить путь к изображению
