@@ -72,7 +72,12 @@ class ImageProcessor:
 
         try:
             self.img = cv2.imread(img_path, -1)
-            self._channels = self.img.shape[-1]
+
+            # http://jira.opentech.local/browse/SHOP-919
+            # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
+            # В таком случае присваиваем tuple 1 канал.
+            shape = self.img.shape
+            self._channels = (len(shape) > 2) and shape[-1] or 1
         except:
             abort(404)
 
@@ -214,6 +219,11 @@ class ImageProcessor:
         canvas[:] = tuple([255] * self._channels)
         return canvas
 
+    # Проверка self.img.shape, так как shape после действия пересобирается cv
+    def _check_img_shape(self):
+        if len(self.img.shape) == 2:
+            self.img.shape += (1, )
+
     # Ресайз изображения
     def _make_resize(self):
         if not self._resize or self._resize not in ['cover', 'contain']:
@@ -233,6 +243,7 @@ class ImageProcessor:
     # Resize contain
     def _contain(self):
         self._make_resize()
+        self._check_img_shape()
         canvas = self._create_canvas()
         height, width = self.img.shape[:2]
 
@@ -250,6 +261,7 @@ class ImageProcessor:
     # Resize cover
     def _cover(self):
         self._make_resize()
+        self._check_img_shape()
         canvas = self._create_canvas()
         height, width = self.img.shape[:2]
 
