@@ -4,6 +4,7 @@ import os
 import numpy as np
 from pathlib import Path
 from flask import abort
+# from matplotlib import pyplot as plt
 
 
 # Класс-процессор
@@ -158,6 +159,7 @@ class ImageProcessor:
 
     # Назначить действия
     def _assign_actions(self):
+        self._actions.append('_normalize_content')
         if self._resize:
             self._actions.append('_' + self._resize)
         if self._quality:
@@ -287,3 +289,21 @@ class ImageProcessor:
         # Выдаем ошибку во всех остальных случаях
         else:
             abort(400)
+
+    # Нормализация контента
+    def _normalize_content(self):
+        normalized_img = self.img.copy()
+
+        imgray = cv2.cvtColor(normalized_img, cv2.COLOR_BGR2GRAY)
+        ret, thresh = cv2.threshold(imgray, 240, 240, 240)
+        _, contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(normalized_img, contours, 1, (0, 240, 0), 1)
+
+        (x, y, z) = np.where(normalized_img == (0, 240, 0))
+        (topx, topy, topz) = (np.min(x) - 1, np.min(y) - 1, np.min(z))
+        (bottomx, bottomy, bottomz) = (np.max(x) + 1, np.max(y) + 1, np.max(z))
+
+        print(topx, topy)
+        print(bottomx, bottomy)
+
+        self.img = self.img[topx:bottomx, topy:bottomy]
