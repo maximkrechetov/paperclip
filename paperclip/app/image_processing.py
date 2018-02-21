@@ -4,7 +4,6 @@ import os
 import numpy as np
 from pathlib import Path
 from flask import abort
-# from matplotlib import pyplot as plt
 
 
 # Класс-процессор
@@ -46,9 +45,8 @@ class ImageProcessor:
         self._extension = parts[1]
         # Опции сохранения
         self._save_options = self._extension == 'jpg' and [cv2.IMWRITE_JPEG_PROGRESSIVE, 2] or []
-
         # Массив действий для сохранения
-        self._actions = []
+        self._actions = ['_normalize_content']
 
     # Основной метод без сохранения
     def process_without_save(self):
@@ -159,7 +157,6 @@ class ImageProcessor:
 
     # Назначить действия
     def _assign_actions(self):
-        self._actions.append('_normalize_content')
         if self._resize:
             self._actions.append('_' + self._resize)
         if self._quality:
@@ -216,8 +213,10 @@ class ImageProcessor:
         return width, height
 
     # Создание канвы
-    def _create_canvas(self):
-        canvas = np.ndarray(shape=(self._height, self._width, self._channels), dtype=np.uint8)
+    def _create_canvas(self, height=None, width=None):
+        new_height = height or self._height
+        new_width = width or self._width
+        canvas = np.ndarray(shape=(new_height, new_width, self._channels), dtype=np.uint8)
         canvas[:] = tuple([255] * self._channels)
         return canvas
 
@@ -292,18 +291,24 @@ class ImageProcessor:
 
     # Нормализация контента
     def _normalize_content(self):
-        normalized_img = self.img.copy()
+        (y, x, _) = np.where(self.img != (255, 255, 255))
+        (top_y, top_x) = (np.min(y), np.min(x))
+        (bottom_y, bottom_x) = (np.max(y), np.max(x))
 
-        imgray = cv2.cvtColor(normalized_img, cv2.COLOR_BGR2GRAY)
-        ret, thresh = cv2.threshold(imgray, 240, 240, 240)
-        _, contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(normalized_img, contours, 1, (0, 240, 0), 1)
+        self.img = self.img[top_y:bottom_y, top_x:bottom_x]
 
-        (x, y, z) = np.where(normalized_img == (0, 240, 0))
-        (topx, topy, topz) = (np.min(x) - 1, np.min(y) - 1, np.min(z))
-        (bottomx, bottomy, bottomz) = (np.max(x) + 1, np.max(y) + 1, np.max(z))
+        height, width = self.img.shape[:2]
+        canvas_px = config.NORMALIZE_CANVAS_PX
+        fields_px = config.NORMALIZE_FIELDS_PX
 
-        print(topx, topy)
-        print(bottomx, bottomy)
+        if height < width:
+            canvas = self._create_canvas(height, width + canvas_px)
+            canvas[:height, fields_px:width + fields_px, :self._channels] = self.img
+        elif height > width:
+            canvas = self._create_canvas(height + canvas_px, width)
+            canvas[fields_px:height + fields_px, :width, :self._channels] = self.img
+        else:
+            canvas = self._create_canvas(height + canvas_px, width + canvas_px)
+            canvas[fields_px:height + fields_px, fields_px:width + fields_px, :self._channels] = self.img
 
-        self.img = self.img[topx:bottomx, topy:bottomy]
+        self.img = canvas
