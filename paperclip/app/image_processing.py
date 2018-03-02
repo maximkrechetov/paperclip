@@ -45,9 +45,8 @@ class ImageProcessor:
         self._extension = parts[1]
         # Опции сохранения
         self._save_options = self._extension == 'jpg' and [cv2.IMWRITE_JPEG_PROGRESSIVE, 2] or []
-
         # Массив действий для сохранения
-        self._actions = []
+        self._actions = ['_normalize_content']
 
     # Основной метод без сохранения
     def process_without_save(self):
@@ -214,8 +213,10 @@ class ImageProcessor:
         return width, height
 
     # Создание канвы
-    def _create_canvas(self):
-        canvas = np.ndarray(shape=(self._height, self._width, self._channels), dtype=np.uint8)
+    def _create_canvas(self, height=None, width=None):
+        new_height = height or self._height
+        new_width = width or self._width
+        canvas = np.ndarray(shape=(new_height, new_width, self._channels), dtype=np.uint8)
         canvas[:] = tuple([255] * self._channels)
         return canvas
 
@@ -287,3 +288,27 @@ class ImageProcessor:
         # Выдаем ошибку во всех остальных случаях
         else:
             abort(400)
+
+    # Нормализация контента
+    def _normalize_content(self):
+        (y, x, _) = np.where(self.img != (255, 255, 255))
+        (top_y, top_x) = (np.min(y), np.min(x))
+        (bottom_y, bottom_x) = (np.max(y), np.max(x))
+
+        self.img = self.img[top_y:bottom_y, top_x:bottom_x]
+
+        height, width = self.img.shape[:2]
+        canvas_px = config.NORMALIZE_CANVAS_PX
+        fields_px = config.NORMALIZE_FIELDS_PX
+
+        if height < width:
+            canvas = self._create_canvas(height, width + canvas_px)
+            canvas[:height, fields_px:width + fields_px, :self._channels] = self.img
+        elif height > width:
+            canvas = self._create_canvas(height + canvas_px, width)
+            canvas[fields_px:height + fields_px, :width, :self._channels] = self.img
+        else:
+            canvas = self._create_canvas(height + canvas_px, width + canvas_px)
+            canvas[fields_px:height + fields_px, fields_px:width + fields_px, :self._channels] = self.img
+
+        self.img = canvas
