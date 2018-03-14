@@ -291,7 +291,7 @@ class ImageProcessor:
 
     # Нормализация контента
     def _normalize_content(self):
-        (y, x, _) = np.where(self.img != (255, 255, 255))
+        (y, x, _) = np.where(self.img != tuple([255] * self._channels))
         (top_y, top_x) = (np.min(y), np.min(x))
         (bottom_y, bottom_x) = (np.max(y), np.max(x))
 
