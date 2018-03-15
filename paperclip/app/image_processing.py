@@ -162,19 +162,36 @@ class ImageProcessor:
         if self._quality:
             self._actions.append('_change_quality')
 
+    # Валидация числового параметра
+    def _validate_digit_param(self, name, value):
+        limit = config.FIELDS_LIMITS.get(name, None)
+
+        if not limit:
+            return
+
+        if value > limit:
+            abort(400)
+
     # Парсинг параметров
     def _parse_param(self, part, param_name):
         if getattr(self, '_' + param_name):
             return
 
-        values = part.split('-')
-        if len(values) < 2:
+        part_values = part.split('-')
+
+        if len(part_values) < 2:
             abort(400)
 
-        if values[0] == param_name:
-            if values[1].isdigit():
-                values[1] = int(values[1])
-            setattr(self, '_' + param_name, values[1])
+        key, value = part_values
+
+        if key != param_name:
+            return
+
+        if value.isdigit():
+            value = int(value)
+            self._validate_digit_param(key, value)
+
+        setattr(self, '_' + param_name, value)
 
     # Получить размеры для ресайза cover
     def _get_sizes_cover(self):
