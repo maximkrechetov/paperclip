@@ -4,6 +4,7 @@ import os
 import numpy as np
 from pathlib import Path
 from flask import abort
+from paperclip.aws_client import s3
 
 
 # Класс-процессор
@@ -124,6 +125,61 @@ class ImageProcessor:
 
         cv2.imwrite(abs_path, self.img, self._save_options)
 
+    # Метод с Amazon S3
+    def process_with_s3(self):
+        print(self.full_path)
+        try:
+            img = s3.get_object(Bucket=config.AWS['processed_files_bucket_name'], Key=self.full_path)
+            print(img)
+            # Отдаем объект
+            return
+        except:
+            print('NUEBVUBEVUBEVUBVEUBEUVB')
+            pass
+
+        # Парсим параметры и назначаем действия над картинкой
+        self._parse()
+
+        print('BEFORE GET ORIGINAL PATH')
+        # Находим оригинал
+        original_img_path = self._get_original_img_path_s3()
+        print('AFTER GET ORIGINAL PATH')
+
+        # Назначаем действия над картинкой
+        self._assign_actions()
+
+        # Если никаких действий не требуется, отдаем оригинал
+        if not self._actions:
+            self._img_path = original_img_path
+            return
+
+        self._check_extension(original_img_path)
+
+        try:
+            self.img = cv2.imread(original_img_path, -1)
+
+            # http://jira.opentech.local/browse/SHOP-919
+            # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
+            # В таком случае присваиваем tuple 1 канал.
+            shape = self.img.shape
+            self._channels = (len(shape) > 2) and shape[-1] or 1
+        except:
+            print('LOLI')
+            abort(404)
+
+        for action in self._actions:
+            getattr(self, action, None)()
+
+        output_file_path = config.TMP_DIR + self.full_path
+
+        cv2.imwrite(output_file_path, self.img, self._save_options)
+
+        s3.upload_file(output_file_path, config.AWS['processed_files_bucket_name'], self.full_path)
+
+        # Чистим файлы
+        os.remove(original_img_path)
+        os.remove(output_file_path)
+
     # Получить полный путь к созданному изображению
     def get_full_path(self):
         return self._img_path
@@ -136,6 +192,20 @@ class ImageProcessor:
     def _check_extension(self, img_path):
         if img_path.endswith('.png'):
             self._extension = 'png'
+
+    def _get_original_img_path_s3(self):
+        for ext in config.ORIGINAL_EXTENSIONS:
+            try:
+                key = "{0}.{1}".format(self._id, ext)
+                print('get original path')
+                s3.download_file(config.AWS['original_files_bucket_name'], key, config.TMP_DIR + key)
+                print('download file')
+                return config.TMP_DIR + key
+            except Exception as e:
+                print(e)
+                continue
+
+        abort(404)
 
     # Получить путь к изображению
     def _get_original_img_path(self):
