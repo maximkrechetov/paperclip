@@ -20,14 +20,8 @@ class ImageProcessor:
         self.path = parts[0]
         self.parts = self.path.split('_')
 
-        # Свойства для стриминга
-        self.buffer = None
-        self.retval = None
-
         # Изображение
         self.img = None
-        # Путь к сохраняемому изображению
-        self._img_path = None
 
         # Свойства изображения
         # id
@@ -49,114 +43,32 @@ class ImageProcessor:
         # Массив действий для сохранения
         self._actions = ['_normalize_content']
 
-    # Основной метод без сохранения
-    def process_without_save(self):
-        # Парсим параметры и назначаем действия над картинкой
-        self._parse()
-        self._assign_actions()
-
-        # Ищем оригинальную картинку по имени
-        # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        img_path = self._get_original_img_path()
-
-        # Если оригинал не найден, отдаем 404
-        if not img_path:
-            abort(404)
-
-        # Если никаких действий не требуется, отдаем оригинал
-        if not self._actions:
-            self._img_path = img_path
-            return
-
-        self._check_extension(img_path)
-
-        try:
-            self.img = cv2.imread(img_path, -1)
-
-            # http://jira.opentech.local/browse/SHOP-919
-            # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
-            # В таком случае присваиваем tuple 1 канал.
-            shape = self.img.shape
-            self._channels = (len(shape) > 2) and shape[-1] or 1
-        except:
-            abort(404)
-
-        for action in self._actions:
-            getattr(self, action, None)()
-
-        retval, buffer = cv2.imencode('.' + self._extension, self.img)
-        self.retval = retval
-        self.buffer = buffer
-
-    # Основной метод с сохранением
-    def process_with_save(self):
-        # Если файл уже имеется, ничего не делаем
-        abs_path = self.STORE_DIR + self.full_path
-        self._img_path = abs_path
-
-        if Path(abs_path).is_file():
-            return
-
-        # Парсим параметры и назначаем действия над картинкой
-        self._parse()
-        self._assign_actions()
-
-        # Ищем оригинальную картинку по имени
-        # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        img_path = self._get_original_img_path()
-
-        if not img_path:
-            abort(404)
-
-        # Никаких действий не требуется, отдаем оригинал
-        if not self._actions:
-            self._img_path = img_path
-            return
-
-        self._check_extension(img_path)
-
-        try:
-            self.img = cv2.imread(img_path)
-        except:
-            abort(404)
-
-        for action in self._actions:
-            getattr(self, action, None)()
-
-        cv2.imwrite(abs_path, self.img, self._save_options)
-
     # Метод с Amazon S3
     def process_with_s3(self):
         print(self.full_path)
         try:
-            img = s3.get_object(Bucket=config.AWS['processed_files_bucket_name'], Key=self.full_path)
-            print(img)
-            # Отдаем объект
-            return
+            s3.get_object(Bucket=config.AWS['processed_files_bucket_name'], Key=self.full_path)
+            return self._get_s3_url(config.AWS['processed_files_bucket_name'], self.full_path)
         except:
-            print('NUEBVUBEVUBEVUBVEUBEUVB')
             pass
 
         # Парсим параметры и назначаем действия над картинкой
         self._parse()
 
-        print('BEFORE GET ORIGINAL PATH')
         # Находим оригинал
-        original_img_path = self._get_original_img_path_s3()
-        print('AFTER GET ORIGINAL PATH')
+        original_img_path, original_tmp_path = self._download_file_from_s3()
 
         # Назначаем действия над картинкой
         self._assign_actions()
 
         # Если никаких действий не требуется, отдаем оригинал
         if not self._actions:
-            self._img_path = original_img_path
-            return
+            return self._get_s3_url(config.AWS['original_files_bucket_name'], original_img_path)
 
         self._check_extension(original_img_path)
 
         try:
-            self.img = cv2.imread(original_img_path, -1)
+            self.img = cv2.imread(original_tmp_path, -1)
 
             # http://jira.opentech.local/browse/SHOP-919
             # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
@@ -164,48 +76,48 @@ class ImageProcessor:
             shape = self.img.shape
             self._channels = (len(shape) > 2) and shape[-1] or 1
         except:
-            print('LOLI')
             abort(404)
 
         for action in self._actions:
             getattr(self, action, None)()
 
         output_file_path = config.TMP_DIR + self.full_path
-
         cv2.imwrite(output_file_path, self.img, self._save_options)
-
         s3.upload_file(output_file_path, config.AWS['processed_files_bucket_name'], self.full_path)
 
         # Чистим файлы
-        os.remove(original_img_path)
+        os.remove(original_tmp_path)
         os.remove(output_file_path)
 
-    # Получить полный путь к созданному изображению
-    def get_full_path(self):
-        return self._img_path
-
-    # Получить mimetype изображения
-    def get_mimetype(self):
-        return 'image/' + self._extension
+        return self._get_s3_url(config.AWS['processed_files_bucket_name'], self.full_path)
 
     # Не конвертируем png в jpg из-за проблем с прозрачностью
     def _check_extension(self, img_path):
         if img_path.endswith('.png'):
             self._extension = 'png'
 
-    def _get_original_img_path_s3(self):
+    # Скачиваем файл в /tmp для конвертации
+    def _download_file_from_s3(self):
         for ext in config.ORIGINAL_EXTENSIONS:
             try:
-                key = "{0}.{1}".format(self._id, ext)
-                print('get original path')
-                s3.download_file(config.AWS['original_files_bucket_name'], key, config.TMP_DIR + key)
-                print('download file')
-                return config.TMP_DIR + key
+                path = "{0}.{1}".format(self._id, ext)
+                tmp_path = config.TMP_DIR + path
+                s3.download_file(config.AWS['original_files_bucket_name'], path, tmp_path)
+                return path, tmp_path
             except Exception as e:
                 print(e)
                 continue
 
         abort(404)
+
+    # Получить s3 URL для загруженного изображения
+    def _get_s3_url(self, bucket, path):
+        url_to_file = '{}/{}/{}'.format(s3.meta.endpoint_url,
+                                        bucket,
+                                        path)
+        print(url_to_file)
+
+        return url_to_file
 
     # Получить путь к изображению
     def _get_original_img_path(self):

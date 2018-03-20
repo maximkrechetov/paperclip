@@ -13,6 +13,3 @@ s3.create_bucket(Bucket=AWS['original_files_bucket_name'])
 
 # Создание области пасяти для обработанных картинок, если еще не существует
 s3.create_bucket(Bucket=AWS['processed_files_bucket_name'])
-
-# for key in s3.list_objects(Bucket=AWS['processed_files_bucket_name'])['Contents']:
-#     print(key['Key'])
