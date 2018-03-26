@@ -45,7 +45,6 @@ class ImageProcessor:
 
     # Метод с Amazon S3
     def process_with_s3(self):
-        print(self.full_path)
         try:
             s3.get_object(Bucket=config.AWS['processed_files_bucket_name'], Key=self.full_path)
             return self._get_s3_url(config.AWS['processed_files_bucket_name'], self.full_path)
@@ -115,7 +114,6 @@ class ImageProcessor:
         url_to_file = '{}/{}/{}'.format(s3.meta.endpoint_url,
                                         bucket,
                                         path)
-        print(url_to_file)
 
         return url_to_file
 
