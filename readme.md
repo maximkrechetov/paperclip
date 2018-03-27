@@ -10,7 +10,7 @@ pip install -r requirements.txt
 export FLASK_APP=paperclip/paperclip.py
 export FLASK_DEBUG=false(или true, в зависимости от ситуации)
 
-Указываем в config.py в секции STORE_DIR путь к папке с изображениями (если не настроен).
+Указываем в config.py в секции TMP_DIR путь к временной папке с изображениями на сервере Paperclip (если не настроен).
 
 Запуск:
 flask run

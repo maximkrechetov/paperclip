@@ -1,9 +1,6 @@
 # Включение дебага
 DEBUG = False
 
-# Путь к папке с фотками
-STORE_DIR = '/images/o/'
-
 # Временная папка для хранения конвертируемых фоточек
 TMP_DIR = '/tmp/paperclip/'
 
@@ -24,11 +21,12 @@ FIELDS_LIMITS = {
     'quality': 100
 }
 
+# Параметры AWS
 AWS = {
     'endpoint_url': 'https://s3.e2e4.ru',
     'display_name': "Paperclip application",
     'access_key': "YWEUC6H19MVRACW5VUW3",
     'secret_key': "AZuqpDTT59sQtvLyVnRhRFh7Dk09q1JJfGCyDCdz",
-    'original_files_bucket_name': 'original_images',
-    'processed_files_bucket_name': 'processed_images'
+    'original_files_bucket_name': 'images_originals',
+    'processed_files_bucket_name': 'images_converted'
 }

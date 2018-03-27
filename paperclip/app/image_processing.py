@@ -1,15 +1,16 @@
 import cv2
-import config
 import os
 import numpy as np
-from pathlib import Path
 from flask import abort
 from paperclip.aws_client import s3
+from config import AWS, TMP_DIR, ORIGINAL_EXTENSIONS, \
+    NORMALIZE_CANVAS_PX, NORMALIZE_FIELDS_PX, FIELDS_LIMITS
 
 
 # Класс-процессор
 class ImageProcessor:
-    STORE_DIR = config.STORE_DIR
+    ORIGINAL_BUCKET = AWS['original_files_bucket_name']
+    PROCESSED_BUCKET = AWS['processed_files_bucket_name']
 
     def __init__(self, path):
         # common props
@@ -46,8 +47,10 @@ class ImageProcessor:
     # Метод с Amazon S3
     def process_with_s3(self):
         try:
-            s3.get_object(Bucket=config.AWS['processed_files_bucket_name'], Key=self.full_path)
-            return self._get_s3_url(config.AWS['processed_files_bucket_name'], self.full_path)
+            s3.get_object(Bucket=self.PROCESSED_BUCKET,
+                          Key=self.full_path)
+            return self._get_s3_url(self.PROCESSED_BUCKET,
+                                    self.full_path)
         except:
             pass
 
@@ -62,7 +65,7 @@ class ImageProcessor:
 
         # Если никаких действий не требуется, отдаем оригинал
         if not self._actions:
-            return self._get_s3_url(config.AWS['original_files_bucket_name'], original_img_path)
+            return self._get_s3_url(self.ORIGINAL_BUCKET, original_img_path)
 
         self._check_extension(original_img_path)
 
@@ -80,15 +83,24 @@ class ImageProcessor:
         for action in self._actions:
             getattr(self, action, None)()
 
-        output_file_path = config.TMP_DIR + self.full_path
+        # Сохраняем файл, загружаем на s3
+        output_file_path = TMP_DIR + self.full_path
         cv2.imwrite(output_file_path, self.img, self._save_options)
-        s3.upload_file(output_file_path, config.AWS['processed_files_bucket_name'], self.full_path)
+        s3.upload_file(output_file_path,
+                       self.PROCESSED_BUCKET,
+                       self.full_path,
+                       {'ContentType': 'image/{}'.format(self._extension)})
+
+        # MAKE S3 OBJECT PUBLIC AGAIN
+        s3.put_object_acl(Bucket=self.PROCESSED_BUCKET,
+                          Key=self.full_path,
+                          ACL="public-read")
 
         # Чистим файлы
         os.remove(original_tmp_path)
         os.remove(output_file_path)
 
-        return self._get_s3_url(config.AWS['processed_files_bucket_name'], self.full_path)
+        return self._get_s3_url(self.PROCESSED_BUCKET, self.full_path)
 
     # Не конвертируем png в jpg из-за проблем с прозрачностью
     def _check_extension(self, img_path):
@@ -97,11 +109,11 @@ class ImageProcessor:
 
     # Скачиваем файл в /tmp для конвертации
     def _download_file_from_s3(self):
-        for ext in config.ORIGINAL_EXTENSIONS:
+        for ext in ORIGINAL_EXTENSIONS:
             try:
                 path = "{0}.{1}".format(self._id, ext)
-                tmp_path = config.TMP_DIR + path
-                s3.download_file(config.AWS['original_files_bucket_name'], path, tmp_path)
+                tmp_path = TMP_DIR + path
+                s3.download_file(self.ORIGINAL_BUCKET, path, tmp_path)
                 return path, tmp_path
             except Exception as e:
                 print(e)
@@ -111,23 +123,7 @@ class ImageProcessor:
 
     # Получить s3 URL для загруженного изображения
     def _get_s3_url(self, bucket, path):
-        url_to_file = '{}/{}/{}'.format(s3.meta.endpoint_url,
-                                        bucket,
-                                        path)
-
-        return url_to_file
-
-    # Получить путь к изображению
-    def _get_original_img_path(self):
-        img_path = None
-
-        for ext in config.ORIGINAL_EXTENSIONS:
-            path = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, ext))
-            if not Path(path).is_file():
-                continue
-            img_path = path
-
-        return img_path
+        return '{}/{}/{}'.format(s3.meta.endpoint_url, bucket, path)
 
     # Парсинг пути, назначение необходимых процедур
     def _parse(self):
@@ -144,7 +140,7 @@ class ImageProcessor:
 
     # Валидация числового параметра
     def _validate_digit_param(self, name, value):
-        limit = config.FIELDS_LIMITS.get(name, None)
+        limit = FIELDS_LIMITS.get(name, None)
 
         if not limit:
             return
@@ -295,8 +291,8 @@ class ImageProcessor:
         self.img = self.img[top_y:bottom_y, top_x:bottom_x]
 
         height, width = self.img.shape[:2]
-        canvas_px = config.NORMALIZE_CANVAS_PX
-        fields_px = config.NORMALIZE_FIELDS_PX
+        canvas_px = NORMALIZE_CANVAS_PX
+        fields_px = NORMALIZE_FIELDS_PX
 
         if height < width:
             canvas = self._create_canvas(height, width + canvas_px)
