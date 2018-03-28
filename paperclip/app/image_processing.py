@@ -1,14 +1,16 @@
 import cv2
-import config
 import os
 import numpy as np
-from pathlib import Path
 from flask import abort
+from paperclip.aws_client import s3
+from config import AWS, TMP_DIR, ORIGINAL_EXTENSIONS, \
+    NORMALIZE_CANVAS_PX, NORMALIZE_FIELDS_PX, FIELDS_LIMITS
 
 
 # Класс-процессор
 class ImageProcessor:
-    STORE_DIR = config.STORE_DIR
+    ORIGINAL_BUCKET = AWS['original_files_bucket_name']
+    PROCESSED_BUCKET = AWS['processed_files_bucket_name']
 
     def __init__(self, path):
         # common props
@@ -19,14 +21,8 @@ class ImageProcessor:
         self.path = parts[0]
         self.parts = self.path.split('_')
 
-        # Свойства для стриминга
-        self.buffer = None
-        self.retval = None
-
         # Изображение
         self.img = None
-        # Путь к сохраняемому изображению
-        self._img_path = None
 
         # Свойства изображения
         # id
@@ -48,29 +44,33 @@ class ImageProcessor:
         # Массив действий для сохранения
         self._actions = ['_normalize_content']
 
-    # Основной метод без сохранения
-    def process_without_save(self):
+    # Метод с Amazon S3
+    def process_with_s3(self):
+        try:
+            s3.get_object(Bucket=self.PROCESSED_BUCKET,
+                          Key=self.full_path)
+            return self._get_s3_url(self.PROCESSED_BUCKET,
+                                    self.full_path)
+        except:
+            pass
+
         # Парсим параметры и назначаем действия над картинкой
         self._parse()
+
+        # Находим оригинал
+        original_img_path, original_tmp_path = self._download_file_from_s3()
+
+        # Назначаем действия над картинкой
         self._assign_actions()
-
-        # Ищем оригинальную картинку по имени
-        # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        img_path = self._get_original_img_path()
-
-        # Если оригинал не найден, отдаем 404
-        if not img_path:
-            abort(404)
 
         # Если никаких действий не требуется, отдаем оригинал
         if not self._actions:
-            self._img_path = img_path
-            return
+            return self._get_s3_url(self.ORIGINAL_BUCKET, original_img_path)
 
-        self._check_extension(img_path)
+        self._check_extension(original_img_path)
 
         try:
-            self.img = cv2.imread(img_path, -1)
+            self.img = cv2.imread(original_tmp_path, -1)
 
             # http://jira.opentech.local/browse/SHOP-919
             # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
@@ -83,71 +83,47 @@ class ImageProcessor:
         for action in self._actions:
             getattr(self, action, None)()
 
-        retval, buffer = cv2.imencode('.' + self._extension, self.img)
-        self.retval = retval
-        self.buffer = buffer
+        # Сохраняем файл, загружаем на s3
+        output_file_path = TMP_DIR + self.full_path
+        cv2.imwrite(output_file_path, self.img, self._save_options)
+        s3.upload_file(output_file_path,
+                       self.PROCESSED_BUCKET,
+                       self.full_path,
+                       {'ContentType': 'image/{}'.format(self._extension)})
 
-    # Основной метод с сохранением
-    def process_with_save(self):
-        # Если файл уже имеется, ничего не делаем
-        abs_path = self.STORE_DIR + self.full_path
-        self._img_path = abs_path
+        # MAKE S3 OBJECT PUBLIC AGAIN
+        s3.put_object_acl(Bucket=self.PROCESSED_BUCKET,
+                          Key=self.full_path,
+                          ACL="public-read")
 
-        if Path(abs_path).is_file():
-            return
+        # Чистим файлы
+        os.remove(original_tmp_path)
+        os.remove(output_file_path)
 
-        # Парсим параметры и назначаем действия над картинкой
-        self._parse()
-        self._assign_actions()
-
-        # Ищем оригинальную картинку по имени
-        # Исходим из соглашения, что оригиналы хранятся под именем "%id%.%разрешение%"
-        img_path = self._get_original_img_path()
-
-        if not img_path:
-            abort(404)
-
-        # Никаких действий не требуется, отдаем оригинал
-        if not self._actions:
-            self._img_path = img_path
-            return
-
-        self._check_extension(img_path)
-
-        try:
-            self.img = cv2.imread(img_path)
-        except:
-            abort(404)
-
-        for action in self._actions:
-            getattr(self, action, None)()
-
-        cv2.imwrite(abs_path, self.img, self._save_options)
-
-    # Получить полный путь к созданному изображению
-    def get_full_path(self):
-        return self._img_path
-
-    # Получить mimetype изображения
-    def get_mimetype(self):
-        return 'image/' + self._extension
+        return self._get_s3_url(self.PROCESSED_BUCKET, self.full_path)
 
     # Не конвертируем png в jpg из-за проблем с прозрачностью
     def _check_extension(self, img_path):
         if img_path.endswith('.png'):
             self._extension = 'png'
 
-    # Получить путь к изображению
-    def _get_original_img_path(self):
-        img_path = None
-
-        for ext in config.ORIGINAL_EXTENSIONS:
-            path = os.path.join(self.STORE_DIR, "{0}.{1}".format(self._id, ext))
-            if not Path(path).is_file():
+    # Скачиваем файл в /tmp для конвертации
+    def _download_file_from_s3(self):
+        for ext in ORIGINAL_EXTENSIONS:
+            try:
+                path = "{0}.{1}".format(self._id, ext)
+                tmp_path = TMP_DIR + path
+                s3.download_file(self.ORIGINAL_BUCKET, path, tmp_path)
+                return path, tmp_path
+            except Exception as e:
+                print(e)
                 continue
-            img_path = path
 
-        return img_path
+        abort(404)
+
+    # Получить s3 URL для загруженного изображения
+    def _get_s3_url(self, bucket, path):
+        return '{}/{}/{}'.format(s3.meta.endpoint_url, bucket, path)
 
     # Парсинг пути, назначение необходимых процедур
     def _parse(self):
@@ -164,7 +140,7 @@ class ImageProcessor:
 
     # Валидация числового параметра
     def _validate_digit_param(self, name, value):
-        limit = config.FIELDS_LIMITS.get(name, None)
+        limit = FIELDS_LIMITS.get(name, None)
 
         if not limit:
             return
@@ -315,8 +291,8 @@ class ImageProcessor:
         self.img = self.img[top_y:bottom_y, top_x:bottom_x]
 
         height, width = self.img.shape[:2]
-        canvas_px = config.NORMALIZE_CANVAS_PX
-        fields_px = config.NORMALIZE_FIELDS_PX
+        canvas_px = NORMALIZE_CANVAS_PX
+        fields_px = NORMALIZE_FIELDS_PX
 
         if height < width:
             canvas = self._create_canvas(height, width + canvas_px)
