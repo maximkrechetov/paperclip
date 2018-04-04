@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 from flask import abort
-from paperclip.aws_client import s3
+from aws_client import s3
 from config import AWS, TMP_DIR, ORIGINAL_EXTENSIONS, \
     NORMALIZE_CANVAS_PX, NORMALIZE_FIELDS_PX, FIELDS_LIMITS
 
@@ -12,33 +12,38 @@ class ImageProcessor:
     ORIGINAL_BUCKET = AWS['original_files_bucket_name']
     PROCESSED_BUCKET = AWS['processed_files_bucket_name']
 
-    def __init__(self, path):
-        # common props
-        self.full_path = path
-
-        parts = self.full_path.split('.')
-
-        self.path = parts[0]
-        self.parts = self.path.split('_')
-
+    def __init__(self, image_id, image_data):
         # Изображение
         self.img = None
 
         # Свойства изображения
         # id
-        self._id = None
+        self._id = image_id
         # Ширина
-        self._width = None
+        self._width = image_data['width']
         # Высота
-        self._height = None
+        self._height = image_data['height']
         # Количество каналов
         self._channels = 3
         # Тип ресайза
-        self._resize = None
+        self._resize = image_data['resize']
         # Качество для сохранения
-        self._quality = None
+        self._quality = image_data['quality']
         # Расширение для сохранения
-        self._extension = parts[1]
+        self._extension = image_data['extension']
+
+        # Путь для сохранения
+        self.full_path = 'id-{}_width-{}_height-{}_resize-{}_quality-{}.{}'.format(
+            self._id,
+            self._width,
+            self._height,
+            self._resize,
+            self._quality,
+            self._extension
+        )
+
+        print(self.full_path)
+
         # Опции сохранения
         self._save_options = self._extension == 'jpg' and [cv2.IMWRITE_JPEG_PROGRESSIVE, 2] or []
         # Массив действий для сохранения
@@ -53,9 +58,6 @@ class ImageProcessor:
                                     self.full_path)
         except:
             pass
-
-        # Парсим параметры и назначаем действия над картинкой
-        self._parse()
 
         # Находим оригинал
         original_img_path, original_tmp_path = self._download_file_from_s3()
@@ -125,49 +127,12 @@ class ImageProcessor:
     def _get_s3_url(self, bucket, path):
         return '{}/{}/{}'.format(s3.meta.endpoint_url, bucket, path)
 
-    # Парсинг пути, назначение необходимых процедур
-    def _parse(self):
-        for part in self.parts:
-            for param_name in ['id', 'resize', 'width', 'height', 'quality']:
-                self._parse_param(part, param_name)
-
     # Назначить действия
     def _assign_actions(self):
         if self._resize:
             self._actions.append('_' + self._resize)
         if self._quality:
             self._actions.append('_change_quality')
-
-    # Валидация числового параметра
-    def _validate_digit_param(self, name, value):
-        limit = FIELDS_LIMITS.get(name, None)
-
-        if not limit:
-            return
-
-        if value > limit:
-            abort(400)
-
-    # Парсинг параметров
-    def _parse_param(self, part, param_name):
-        if getattr(self, '_' + param_name):
-            return
-
-        part_values = part.split('-')
-
-        if len(part_values) < 2:
-            abort(400)
-
-        key, value = part_values
-
-        if key != param_name:
-            return
-
-        if value.isdigit():
-            value = int(value)
-            self._validate_digit_param(key, value)
-
-        setattr(self, '_' + param_name, value)
 
     # Получить размеры для ресайза cover
     def _get_sizes_cover(self):
