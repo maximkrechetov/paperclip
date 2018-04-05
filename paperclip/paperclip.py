@@ -23,8 +23,8 @@ def send(payload):
 
     output_channel.basic_publish(exchange='',
                                  routing_key=RABBITMQ_OUTPUT_QUEUE_NAME,
-                                 body=payload)
-    print(Fore.GREEN +
+                                 body=json.dumps(payload))
+    print(Fore.YELLOW +
           "[Paperclip] Sent data to %r queue" % (RABBITMQ_OUTPUT_QUEUE_NAME, ) +
           Style.RESET_ALL)
 
@@ -33,42 +33,53 @@ def send(payload):
 
 # Коллбэк-метод для Rabbit
 def callback(ch, method, properties, body):
-    # Проверим входящие параметры, распарсим JSON
+    print(Fore.YELLOW +
+          "[Paperclip] Received data" +
+          Style.RESET_ALL)
+
+    print(Fore.YELLOW +
+          "[Paperclip] " +
+          str(body) +
+          Style.RESET_ALL)
+
+    # Уведомляем Rabbit о том, что мы получили и обработали сообщение
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
     try:
         input_data = json.loads(body.decode('utf8'))
-        print(Fore.YELLOW +
-              "[Paperclip] Received data" +
-              Style.RESET_ALL)
-
-        processed_urls = []
         image_id = input_data['data']['id']
+    except:
+        send({
+                'ok': False,
+                'error': 'Failed to parse input data. Data may be incorrect.'
+            })
+        return
+
+    # Проверим входящие параметры, распарсим JSON
+    try:
+        processed_urls = []
 
         for image_data in input_data['data']['config']:
             processor = ImageProcessor(image_id, image_data)
             processed_urls.append(processor.process_with_s3())
 
-        send(json.dumps(
-            {
+        print(Fore.GREEN +
+              '[Paperclip] Successfully done' +
+              Style.RESET_ALL)
+
+        send({
+                'ok': True,
                 'destination': input_data['destination'],
                 'data': {
                     'id': image_id,
                     'urls': processed_urls
                 }
-            }
-        ))
-    except Exception as e:
-        print(Fore.RED +
-              '[Paperclip] Failed: ' +
-              str(e) +
-              Style.RESET_ALL)
-        return
-
-    print(Fore.GREEN +
-          '[Paperclip] Done' +
-          Style.RESET_ALL)
-
-    # Уведомляем Rabbit о том, что мы получили и обработали сообщение
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+            })
+    except:
+        send({
+                'ok': False,
+                'error': 'Failed to convert images'
+            })
 
 channel.basic_qos(prefetch_count=1)
 channel.basic_consume(callback, queue=RABBITMQ_INPUT_QUEUE_NAME)

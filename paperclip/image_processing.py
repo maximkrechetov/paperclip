@@ -1,7 +1,7 @@
 import cv2
 import os
 import numpy as np
-from flask import abort
+from colorama import Fore, Style
 from aws_client import s3
 from config import AWS, TMP_DIR, ORIGINAL_EXTENSIONS, \
     NORMALIZE_CANVAS_PX, NORMALIZE_FIELDS_PX, FIELDS_LIMITS
@@ -42,8 +42,6 @@ class ImageProcessor:
             self._extension
         )
 
-        print(self.full_path)
-
         # Опции сохранения
         self._save_options = self._extension == 'jpg' and [cv2.IMWRITE_JPEG_PROGRESSIVE, 2] or []
         # Массив действий для сохранения
@@ -79,8 +77,8 @@ class ImageProcessor:
             # В таком случае присваиваем tuple 1 канал.
             shape = self.img.shape
             self._channels = (len(shape) > 2) and shape[-1] or 1
-        except:
-            abort(404)
+        except Exception as e:
+            self._error(repr(e))
 
         for action in self._actions:
             getattr(self, action, None)()
@@ -117,11 +115,10 @@ class ImageProcessor:
                 tmp_path = TMP_DIR + path
                 s3.download_file(self.ORIGINAL_BUCKET, path, tmp_path)
                 return path, tmp_path
-            except Exception as e:
-                print(e)
+            except:
                 continue
 
-        abort(404)
+        self._error('Image original not found')
 
     # Получить s3 URL для загруженного изображения
     def _get_s3_url(self, bucket, path):
@@ -245,7 +242,7 @@ class ImageProcessor:
             pass
         # Выдаем ошибку во всех остальных случаях
         else:
-            abort(400)
+            self._error('Wrong extension')
 
     # Нормализация контента
     def _normalize_content(self):
@@ -270,3 +267,10 @@ class ImageProcessor:
             canvas[fields_px:height + fields_px, fields_px:width + fields_px, :self._channels] = self.img
 
         self.img = canvas
+
+    # Вызов ошибки
+    def _error(self, msg):
+        print(Fore.RED +
+              "[Paperclip] Error: {}".format(msg) +
+              Style.RESET_ALL)
+        raise Exception(msg)
