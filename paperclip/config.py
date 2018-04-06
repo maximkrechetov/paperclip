@@ -16,8 +16,8 @@ NORMALIZE_FIELDS_PX = int(NORMALIZE_CANVAS_PX / 2)
 
 # Ограничения для числовых параметров
 FIELDS_LIMITS = {
-    'width': 1200,
-    'height': 1200,
+    'width': 1700,
+    'height': 1700,
     'quality': 100
 }
 
@@ -30,3 +30,10 @@ AWS = {
     'original_files_bucket_name': 'images_originals',
     'processed_files_bucket_name': 'images_converted'
 }
+
+# Параметры RabbitMQ
+RABBITMQ_HOST = '100.100.104.240'
+RABBITMQ_LOGIN = 'admin'
+RABBITMQ_PASSWORD = 'password'
+RABBITMQ_INPUT_QUEUE_NAME = 'images_to_convert'
+RABBITMQ_OUTPUT_QUEUE_NAME = 'images_converted'
