@@ -32,6 +32,8 @@ AWS = {
 }
 
 # Параметры RabbitMQ
-RABBITMQ_HOST = 'localhost'
+RABBITMQ_HOST = '100.100.104.240'
+RABBITMQ_LOGIN = 'admin'
+RABBITMQ_PASSWORD = 'password'
 RABBITMQ_INPUT_QUEUE_NAME = 'images_to_convert'
 RABBITMQ_OUTPUT_QUEUE_NAME = 'images_converted'

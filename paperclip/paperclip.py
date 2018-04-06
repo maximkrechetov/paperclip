@@ -1,11 +1,13 @@
 import pika
 import json
 from colorama import Fore, Style
-from config import RABBITMQ_HOST, RABBITMQ_INPUT_QUEUE_NAME, RABBITMQ_OUTPUT_QUEUE_NAME
+from config import RABBITMQ_HOST, RABBITMQ_INPUT_QUEUE_NAME, RABBITMQ_OUTPUT_QUEUE_NAME,\
+    RABBITMQ_LOGIN, RABBITMQ_PASSWORD
 from image_processing import ImageProcessor
 
+credentials = pika.PlainCredentials(RABBITMQ_LOGIN, RABBITMQ_PASSWORD)
 connection = pika.BlockingConnection(
-    pika.ConnectionParameters(RABBITMQ_HOST)
+    pika.ConnectionParameters(RABBITMQ_HOST, credentials=credentials)
 )
 
 channel = connection.channel()
@@ -15,7 +17,7 @@ channel.queue_declare(queue=RABBITMQ_INPUT_QUEUE_NAME, durable=True)
 # Посылает сообщение в очередь для картинок, ожидаюших конвертации
 def send(payload):
     output_connection = pika.BlockingConnection(
-        pika.ConnectionParameters(RABBITMQ_HOST)
+        pika.ConnectionParameters(RABBITMQ_HOST, credentials=credentials)
     )
 
     output_channel = connection.channel()
