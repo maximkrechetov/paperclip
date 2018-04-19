@@ -12,13 +12,13 @@ class ImageProcessor:
     ORIGINAL_BUCKET = AWS['original_files_bucket_name']
     PROCESSED_BUCKET = AWS['processed_files_bucket_name']
 
-    def __init__(self, image_id, image_data):
+    def __init__(self, image_data):
         # Изображение
         self.img = None
 
         # Свойства изображения
         # id
-        self._id = image_id
+        self._id = image_data['id']
         # Ширина
         self._width = image_data['width']
         # Высота
