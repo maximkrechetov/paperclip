@@ -1,8 +1,9 @@
 import pika
 import json
 from colorama import Fore, Style
+from multiprocessing import Pool
 from config import RABBITMQ_HOST, RABBITMQ_INPUT_QUEUE_NAME, RABBITMQ_OUTPUT_QUEUE_NAME,\
-    RABBITMQ_LOGIN, RABBITMQ_PASSWORD
+    RABBITMQ_LOGIN, RABBITMQ_PASSWORD, POOL_PROCESSES
 from image_processing import ImageProcessor
 
 credentials = pika.PlainCredentials(RABBITMQ_LOGIN, RABBITMQ_PASSWORD)
@@ -15,7 +16,7 @@ channel.queue_declare(queue=RABBITMQ_INPUT_QUEUE_NAME, durable=True)
 
 
 # Посылает сообщение в очередь для картинок, ожидаюших конвертации
-def send(payload):
+def _send(payload):
     output_connection = pika.BlockingConnection(
         pika.ConnectionParameters(RABBITMQ_HOST, credentials=credentials)
     )
@@ -31,6 +32,11 @@ def send(payload):
           Style.RESET_ALL)
 
     output_connection.close()
+
+
+# Метод для передачи в pool.map для распараллеливания
+def _process_image(image_config):
+    return ImageProcessor(image_config).process_with_s3()
 
 
 # Коллбэк-метод для Rabbit
@@ -51,7 +57,7 @@ def callback(ch, method, properties, body):
         input_data = json.loads(body.decode('utf8'))
         image_id = input_data['data']['id']
     except:
-        send({
+        _send({
                 'ok': False,
                 'error': 'Failed to parse input data. Data may be incorrect.'
             })
@@ -59,17 +65,15 @@ def callback(ch, method, properties, body):
 
     # Проверим входящие параметры, распарсим JSON
     try:
-        processed_urls = []
-
-        for image_data in input_data['data']['config']:
-            processor = ImageProcessor(image_id, image_data)
-            processed_urls.append(processor.process_with_s3())
-
+        pool = Pool(processes=POOL_PROCESSES)
+        processed_urls = pool.map(_process_image, input_data['data']['config'])
+        pool.close()
+        pool.join()
         print(Fore.GREEN +
               '[Paperclip] Successfully done' +
               Style.RESET_ALL)
 
-        send({
+        _send({
                 'ok': True,
                 'destination': input_data['destination'],
                 'data': {
@@ -77,10 +81,10 @@ def callback(ch, method, properties, body):
                     'urls': processed_urls
                 }
             })
-    except:
-        send({
+    except Exception as e:
+        _send({
                 'ok': False,
-                'error': 'Failed to convert images'
+                'error': 'Failed to convert images: {}'.format(e)
             })
 
 channel.basic_qos(prefetch_count=1)

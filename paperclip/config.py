@@ -37,3 +37,6 @@ RABBITMQ_LOGIN = 'admin'
 RABBITMQ_PASSWORD = 'password'
 RABBITMQ_INPUT_QUEUE_NAME = 'images_to_convert'
 RABBITMQ_OUTPUT_QUEUE_NAME = 'images_converted'
+
+# Параметры Pool
+POOL_PROCESSES = 8
