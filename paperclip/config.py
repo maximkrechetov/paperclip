@@ -4,12 +4,6 @@ DEBUG = False
 # Временная папка для хранения конвертируемых фоточек
 TMP_DIR = '/tmp/paperclip/'
 
-# Сохранять ли изображения физически после процессинга
-SAVE_PROCESSED_IMAGES = False
-
-# Разрешение изначальных изображений
-ORIGINAL_EXTENSIONS = ['jpg', 'png']
-
 # Поля для нормализации
 NORMALIZE_CANVAS_PX = 20
 NORMALIZE_FIELDS_PX = int(NORMALIZE_CANVAS_PX / 2)
@@ -32,7 +26,7 @@ AWS = {
 }
 
 # Параметры RabbitMQ
-RABBITMQ_HOST = '100.100.104.240'
+RABBITMQ_HOST = '100.100.104.223'
 RABBITMQ_LOGIN = 'admin'
 RABBITMQ_PASSWORD = 'password'
 RABBITMQ_INPUT_QUEUE_NAME = 'images_to_convert'
