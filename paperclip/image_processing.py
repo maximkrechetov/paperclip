@@ -3,8 +3,7 @@ import os
 import numpy as np
 from colorama import Fore, Style
 from aws_client import s3
-from config import AWS, TMP_DIR, ORIGINAL_EXTENSIONS, \
-    NORMALIZE_CANVAS_PX, NORMALIZE_FIELDS_PX, FIELDS_LIMITS
+from config import AWS, TMP_DIR, NORMALIZE_CANVAS_PX, NORMALIZE_FIELDS_PX, FIELDS_LIMITS
 
 
 # Класс-процессор
@@ -13,12 +12,15 @@ class ImageProcessor:
     PROCESSED_BUCKET = AWS['processed_files_bucket_name']
 
     def __init__(self, image_data):
+        self.original_filename = image_data['fileName']
+
         # Изображение
         self.img = None
 
         # Свойства изображения
         # id
-        self._id = image_data['id']
+        parts = self.original_filename.split('.')
+        self._id = parts[0]
         # Ширина
         self._width = image_data['width']
         # Высота
@@ -57,22 +59,21 @@ class ImageProcessor:
         except:
             pass
 
-        # Находим оригинал
-        original_img_path, original_tmp_path = self._download_file_from_s3()
+        # Скачиваем оригинал
+        original_tmp_path = self._download_file_from_s3()
 
         # Назначаем действия над картинкой
         self._assign_actions()
 
         # Если никаких действий не требуется, отдаем оригинал
         if not self._actions:
-            return self._get_s3_url(self.ORIGINAL_BUCKET, original_img_path)
+            return self._get_s3_url(self.ORIGINAL_BUCKET, self.original_filename)
 
-        self._check_extension(original_img_path)
+        self._check_extension(self.original_filename)
 
         try:
             self.img = cv2.imread(original_tmp_path, -1)
 
-            # http://jira.opentech.local/browse/SHOP-919
             # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
             # В таком случае присваиваем tuple 1 канал.
             shape = self.img.shape
@@ -109,16 +110,12 @@ class ImageProcessor:
 
     # Скачиваем файл в /tmp для конвертации
     def _download_file_from_s3(self):
-        for ext in ORIGINAL_EXTENSIONS:
-            try:
-                path = "{0}.{1}".format(self._id, ext)
-                tmp_path = TMP_DIR + path
-                s3.download_file(self.ORIGINAL_BUCKET, path, tmp_path)
-                return path, tmp_path
-            except:
-                continue
-
-        self._error('Image original not found')
+        try:
+            tmp_path = TMP_DIR + self.original_filename
+            s3.download_file(self.ORIGINAL_BUCKET, self.original_filename, tmp_path)
+            return tmp_path
+        except:
+            self._error('Image original not found')
 
     # Получить s3 URL для загруженного изображения
     def _get_s3_url(self, bucket, path):

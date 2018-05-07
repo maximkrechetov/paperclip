@@ -55,7 +55,7 @@ def callback(ch, method, properties, body):
 
     try:
         input_data = json.loads(body.decode('utf8'))
-        image_id = input_data['data']['id']
+        filename = input_data['data']['fileName']
     except:
         _send({
                 'ok': False,
@@ -77,7 +77,7 @@ def callback(ch, method, properties, body):
                 'ok': True,
                 'destination': input_data['destination'],
                 'data': {
-                    'id': image_id,
+                    'fileName': filename,
                     'urls': processed_urls
                 }
             })
