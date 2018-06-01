@@ -6,5 +6,7 @@
 cd /%папка_с_проектами/paperclip
 pip install -r requirements.txt
 
+Настраиваем приложение с помощью .env файла. Пример показан в .env.sample
+
 Запуск:
 python paperclip/paperclip.py
