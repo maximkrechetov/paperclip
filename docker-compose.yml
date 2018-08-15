@@ -1,6 +1,10 @@
 version: '2'
 services:
-  paperclip:
+  app:
     build: .
     volumes:
       - ./paperclip:/paperclip
+  thumb_generator:
+    build: ../thumb_generator
+    volumes:
+      - ../thumb_generator/app:/thumb_generator
