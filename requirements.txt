@@ -4,3 +4,4 @@ boto3
 pika
 colorama
 python-dotenv
+kafka-python
