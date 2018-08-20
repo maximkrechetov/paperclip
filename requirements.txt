@@ -1,7 +1,6 @@
 numpy==1.14.5
 opencv-python==3.4.2.17
 boto3
-pika
 colorama
 python-dotenv
 kafka-python

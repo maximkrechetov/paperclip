@@ -1,28 +1,41 @@
 import multiprocessing
+import json
+
 from kafka import KafkaConsumer
-from config import KAFKA_HOST, KAFKA_PORT, KAFKA_TIMEOUT, KAFKA_TOPIC
+from colorama import Fore, Style
+
+from config import KAFKA_BROKERS, KAFKA_TOPIC, POOL_PROCESSES
+from image_processing import ImageProcessor
 
 
-class Consumer(multiprocessing.Process):
+class Consumer:
     def __init__(self):
-        multiprocessing.Process.__init__(self)
-        self.stop_event = multiprocessing.Event()
+        self._init_consumer()
 
-    def stop(self):
-        self.stop_event.set()
+    def _init_consumer(self):
+        self.consumer = KafkaConsumer(
+            KAFKA_TOPIC,
+            bootstrap_servers=KAFKA_BROKERS,
+            api_version=(0, 10),
+            auto_offset_reset='latest',
+            enable_auto_commit=False,
+            value_deserializer=lambda m: json.loads(m.decode("utf-8"))
+        )
 
-    def run(self):
-        consumer = KafkaConsumer(bootstrap_servers='{}:{}'.format(KAFKA_HOST, KAFKA_PORT),
-                                 api_version=(0, 10),
-                                 auto_offset_reset='earliest',
-                                 consumer_timeout_ms=KAFKA_TIMEOUT)
+    @staticmethod
+    def _process_image(image_config):
+        return ImageProcessor(image_config).process_with_s3()
 
-        consumer.subscribe([KAFKA_TOPIC])
+    def process(self):
+        for message in self.consumer:
+            try:
+                pool = multiprocessing.Pool(processes=POOL_PROCESSES)
+                processed_urls = pool.map(self._process_image, message.value['data']['config'])
 
-        while not self.stop_event.is_set():
-            for message in consumer:
-                print(message)
-                if self.stop_event.is_set():
-                    break
+                print(processed_urls)
 
-        consumer.close()
+                pool.close()
+                pool.join()
+                print(Fore.GREEN + '[Paperclip] Successfully done' + Style.RESET_ALL)
+            except Exception as e:
+                print(Fore.RED + '[Paperclip] Error: ' + e + Style.RESET_ALL)
