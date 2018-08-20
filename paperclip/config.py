@@ -36,12 +36,10 @@ AWS = {
     'processed_files_bucket_name': os.getenv('AWS_PROCESSED_FILES_BUCKET_NAME')
 }
 
-# Параметры RabbitMQ
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST')
-RABBITMQ_LOGIN = os.getenv('RABBITMQ_LOGIN')
-RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD')
-RABBITMQ_INPUT_QUEUE_NAME = os.getenv('RABBITMQ_INPUT_QUEUE_NAME')
-RABBITMQ_OUTPUT_QUEUE_NAME = os.getenv('RABBITMQ_OUTPUT_QUEUE_NAME')
+# Настройки Kafka
+KAFKA_BROKERS = os.getenv('KAFKA_BROKERS')
+KAFKA_GROUP_ID = os.getenv('KAFKA_GROUP_ID')
+KAFKA_TOPIC = os.getenv('KAFKA_TOPIC')
 
 # Параметры Pool
 POOL_PROCESSES = int(os.getenv('POOL_PROCESSES'))

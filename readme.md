@@ -5,6 +5,9 @@
 sudo docker-compose Docker
 sudo docker-compose up
 
+Если нужно установить питоновский пакет:
+sudo docker run --rm -it -v $(pwd):/opt nexus.opentech.local:8082/aevitas/python_pip:18.0 install %packagename%
+
 Сборка и запуск локально без Docker:
 
 Для запуска должны быть установлены Python 3.x, python3-pip.
