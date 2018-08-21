@@ -51,13 +51,13 @@ class ImageProcessor:
 
     # Метод с Amazon S3
     def process_with_s3(self):
-        try:
-            s3.get_object(Bucket=self.PROCESSED_BUCKET,
-                          Key=self.full_path)
-            return self._get_s3_url(self.PROCESSED_BUCKET,
-                                    self.full_path)
-        except:
-            pass
+        # try:
+        #     s3.get_object(Bucket=self.PROCESSED_BUCKET,
+        #                   Key=self.full_path)
+        #     return self._get_s3_url(self.PROCESSED_BUCKET,
+        #                             self.full_path)
+        # except:
+        #     pass
 
         # Скачиваем оригинал
         original_tmp_path = self._download_file_from_s3()
@@ -98,7 +98,6 @@ class ImageProcessor:
                           ACL="public-read")
 
         # Чистим файлы
-        os.remove(original_tmp_path)
         os.remove(output_file_path)
 
         return self._get_s3_url(self.PROCESSED_BUCKET, self.full_path)
@@ -112,7 +111,8 @@ class ImageProcessor:
     def _download_file_from_s3(self):
         try:
             tmp_path = TMP_DIR + self.original_filename
-            s3.download_file(self.ORIGINAL_BUCKET, self.original_filename, tmp_path)
+            if not os.path.exists(tmp_path):
+                s3.download_file(self.ORIGINAL_BUCKET, self.original_filename, tmp_path)
             return tmp_path
         except:
             self._error('Image original not found')

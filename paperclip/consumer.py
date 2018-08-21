@@ -1,10 +1,11 @@
 import multiprocessing
 import json
+import os
 
 from kafka import KafkaConsumer
 from colorama import Fore, Style
 
-from config import KAFKA_BROKERS, KAFKA_TOPIC, POOL_PROCESSES
+from config import KAFKA_BROKERS, KAFKA_TOPIC, POOL_PROCESSES, TMP_DIR
 from image_processing import ImageProcessor
 
 
@@ -30,12 +31,17 @@ class Consumer:
         for message in self.consumer:
             try:
                 pool = multiprocessing.Pool(processes=POOL_PROCESSES)
-                processed_urls = pool.map(self._process_image, message.value['data']['config'])
-
-                print(processed_urls)
-
+                pool.map(self._process_image, message.value['data']['config'])
                 pool.close()
                 pool.join()
-                print(Fore.GREEN + '[Paperclip] Successfully done' + Style.RESET_ALL)
+
+                os.remove(TMP_DIR + message.value['data']['fileName'])
+                print(
+                    Fore.GREEN +
+                    '[Paperclip] Successfully done: ' +
+                    message.value['data']['fileName'] +
+                    Style.RESET_ALL
+                )
             except Exception as e:
-                print(Fore.RED + '[Paperclip] Error: ' + e + Style.RESET_ALL)
+                print(Fore.RED + '[Paperclip] Error: ' + Style.RESET_ALL)
+                print(repr(e))
