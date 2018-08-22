@@ -8,3 +8,10 @@ services:
     build: ../thumb_generator
     volumes:
       - ../thumb_generator/app:/thumb_generator
+  image_uploader:
+    image: nexus.opentech.local:8082/aevitas/nodejs10_yarn-dev:10.7.0
+    command: dev
+    volumes:
+      - "../image_uploader:/srv/http"
+    ports:
+      - "3003:3000"
