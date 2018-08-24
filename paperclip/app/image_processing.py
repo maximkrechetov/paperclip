@@ -315,8 +315,8 @@ class ImageProcessor:
         self.img = self.img[top_y:bottom_y, top_x:bottom_x]
 
         height, width = self.img.shape[:2]
-        canvas_px = config.NORMALIZE_CANVAS_PX
-        fields_px = config.NORMALIZE_FIELDS_PX
+        canvas_px = 0 if self._extension == 'png' else config.NORMALIZE_CANVAS_PX
+        fields_px = 0 if self._extension == 'png' else config.NORMALIZE_FIELDS_PX
 
         if height < width:
             canvas = self._create_canvas(height, width + canvas_px)
