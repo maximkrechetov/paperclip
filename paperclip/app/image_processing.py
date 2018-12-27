@@ -70,7 +70,7 @@ class ImageProcessor:
         self._check_extension(img_path)
 
         try:
-            self.img = cv2.imread(img_path, -1)
+            self.img = cv2.imread(img_path, cv2.IMREAD_COLOR)
 
             # http://jira.opentech.local/browse/SHOP-919
             # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
