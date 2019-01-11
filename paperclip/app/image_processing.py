@@ -9,6 +9,7 @@ from flask import abort
 # Класс-процессор
 class ImageProcessor:
     STORE_DIR = config.STORE_DIR
+    DEFAULT_CANVAS_COLOR_VALUE = 255
 
     def __init__(self, path):
         # common props
@@ -70,7 +71,7 @@ class ImageProcessor:
         self._check_extension(img_path)
 
         try:
-            self.img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+            self.img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
 
             # http://jira.opentech.local/browse/SHOP-919
             # Как оказалось, Ч/Б изображения идут с одним каналом, который при открытии не попадает в tuple.
@@ -233,8 +234,14 @@ class ImageProcessor:
     def _create_canvas(self, height=None, width=None):
         new_height = height or self._height
         new_width = width or self._width
-        canvas = np.ndarray(shape=(new_height, new_width, self._channels), dtype=np.uint8)
-        canvas[:] = tuple([255] * self._channels)
+        canvas = np.ndarray(shape=(new_height, new_width, self._channels), dtype=self.img.dtype)
+        canvas_color_value = self.DEFAULT_CANVAS_COLOR_VALUE
+
+        # Если присутствует альфа-канал, делаем цвет как у альфа-канала, основываясь на первом пикселе
+        if self._extension == 'png' and self._channels == 4:
+            canvas_color_value = self.img.item(0, 0, -1)
+
+        canvas[:] = tuple([canvas_color_value] * self._channels)
         return canvas
 
     # Проверка self.img.shape, так как shape после действия пересобирается cv
