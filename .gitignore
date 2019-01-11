@@ -1,2 +1,5 @@
 .idea
 venv
+__pycache__
+paperclip/__pycache__
+paperclip/app/__pycache__
